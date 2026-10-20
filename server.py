@@ -28,6 +28,15 @@ class IglooHTTPHandler(http.server.SimpleHTTPRequestHandler):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, directory=DIRECTORY, **kwargs)
 
+    def handle_one_request(self):
+        # Browsers abort in-flight requests routinely (navigation away, asset
+        # cancel). Without this guard the socket error propagates out of
+        # copyfile() and terminates the whole server process.
+        try:
+            super().handle_one_request()
+        except (ConnectionResetError, BrokenPipeError, ConnectionAbortedError):
+            self.close_connection = True
+
     def end_headers(self):
         # Enable CORS and Worker threading policies
         self.send_header("Access-Control-Allow-Origin", "*")
@@ -59,7 +68,10 @@ if __name__ == "__main__":
     if len(sys.argv) > 1 and sys.argv[1].isdigit():
         PORT = int(sys.argv[1])
     server_address = ("127.0.0.1", PORT)
-    httpd = http.server.HTTPServer(server_address, IglooHTTPHandler)
+    # Threading so parallel asset loads (browser requests dozens of .drc/.ktx2
+    # files at once) are served concurrently instead of serialized.
+    httpd = http.server.ThreadingHTTPServer(server_address, IglooHTTPHandler)
+    httpd.daemon_threads = True
     print(f"🧊 Igloo 3D Experience running at: http://localhost:{PORT}")
     print("Press Ctrl+C to stop.")
     try:
