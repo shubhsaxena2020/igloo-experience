@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Igloo 4 Web Workers Test</title>
+</head>
+<body>
+  <h1>Igloo Web Workers Test Suite</h1>
+  <div id="status">Running tests...</div>
+  <pre id="log"></pre>
+
+  <script type="module">
+    const logEl = document.getElementById('log');
+    const statusEl = document.getElementById('status');
+    const results = {
+      audioworker: null,
+      msdfworker: null,
+      bitmapworker: null,
+      exrworker: null,
+      allPassed: false
+    };
+    window.__WORKER_TEST_RESULTS__ = results;
+
+    function log(msg) {
+      console.log(msg);
+      logEl.textContent += msg + '\n';
+    }
+
+    async function testAudioWorker() {
+      log('[audioworker] Testing...');
+      const worker = new Worker('/assets/audioworker-036a09db.js');
+      const res = await fetch('/assets/audio/beeps.ogg');
+      const buf = await res.arrayBuffer();
+
+      return new Promise((resolve, reject) => {
+        worker.onmessage = (e) => {
+          log('[audioworker] Received decoded audio: ' + JSON.stringify({
+            samplesDecoded: e.data.samplesDecoded,
+            sampleRate: e.data.sampleRate,
+            channels: e.data.channelData?.length,
+            transferredBuffer: e.data.channelData?.[0]?.buffer?.byteLength
+          }));
+          if (e.data.samplesDecoded > 0 && e.data.channelData?.length > 0) {
+            results.audioworker = {
+              success: true,
+              samplesDecoded: e.data.samplesDecoded,
+              sampleRate: e.data.sampleRate,
+              channels: e.data.channelData.length
+            };
+            worker.terminate();
+            resolve();
+          } else {
+            reject(new Error('Audio worker failed or returned invalid data'));
+          }
+        };
+        worker.onerror = (err) => reject(err);
+        worker.postMessage({ buffer: buf }, [buf]);
+      });
+    }
+
+    async function testMsdfWorker() {
+      log('[msdfworker] Testing...');
+      const worker = new Worker('/assets/msdfworker-ac346fa7.js');
+      const res = await fetch('/assets/fonts/IBMPlexMono-Medium.json');
+      const font = await res.json();
+      
+      // Main-thread preprocessing as done in App3D class AR
+      const glyphs = font.glyphs;
+      font.glyphs = {};
+      glyphs.forEach(c => {
+        const h = String.fromCharCode(c.unicode);
+        c.isWhitespace = /\s/.test(h);
+        font.glyphs[h] = c;
+      });
+      font.placeholderChar = Object.keys(font.glyphs).sort()[0];
+
+      return new Promise((resolve, reject) => {
+        worker.onmessage = (e) => {
+          const b = e.data.buffers;
+          log('[msdfworker] Received buffers: ' + Object.keys(b).join(', '));
+          if (b && b.position && b.index && b.uv && b.centr && b.uvMask && b.textWeights && b.lineWeights) {
+            results.msdfworker = {
+              success: true,
+              glyphQuadCount: b.position.length / 12,
+              indexCount: b.index.length,
+              maxLineHeight: b.maxLineHeight,
+              maxUVDisp: b.maxUVDisp
+            };
+            worker.terminate();
+            resolve();
+          } else {
+            reject(new Error('MSDF worker returned incomplete buffer set'));
+          }
+        };
+        worker.onerror = (err) => reject(err);
+        worker.postMessage({
+          font: font,
+          options: {
+            text: 'IGLOO INC.\nREVERSE ENGINEERING 2026',
+            width: 15,
+            align: 'left',
+            size: 1,
+            lineHeight: 1.4,
+            letterSpacing: 0,
+            wordSpacing: 0,
+            wordBreak: false
+          }
+        });
+      });
+    }
+
+    async function testBitmapWorker() {
+      log('[bitmapworker] Testing...');
+      const worker = new Worker('/assets/bitmapworker-046527f8.js');
+      return new Promise((resolve, reject) => {
+        worker.onmessage = (e) => {
+          log('[bitmapworker] Received bitmap: ' + (e.data.bitmap ? `${e.data.bitmap.width}x${e.data.bitmap.height}` : 'null'));
+          if (e.data.bitmap && e.data.bitmap.width > 0) {
+            results.bitmapworker = {
+              success: true,
+              width: e.data.bitmap.width,
+              height: e.data.bitmap.height
+            };
+            worker.terminate();
+            resolve();
+          } else {
+            reject(new Error('Bitmap worker failed or returned invalid bitmap'));
+          }
+        };
+        worker.onerror = (err) => reject(err);
+        worker.postMessage({
+          url: '/assets/images/perlin-datatexture.png',
+          flipY: true
+        });
+      });
+    }
+
+    async function testExrWorker() {
+      log('[exrworker] Testing...');
+      const worker = new Worker('/assets/exrworker-41cbee65.js');
+      return new Promise((resolve, reject) => {
+        worker.onmessage = (e) => {
+          log('[exrworker] Received parsed EXR: ' + JSON.stringify({
+            width: e.data.width,
+            height: e.data.height,
+            format: e.data.format,
+            colorSpace: e.data.colorSpace,
+            type: e.data.type,
+            dataLength: e.data.data?.length
+          }));
+          if (e.data.width > 0 && e.data.height > 0 && e.data.data) {
+            results.exrworker = {
+              success: true,
+              width: e.data.width,
+              height: e.data.height,
+              format: e.data.format,
+              colorSpace: e.data.colorSpace,
+              type: e.data.type,
+              dataType: e.data.data.constructor.name,
+              elementsCount: e.data.data.length
+            };
+            worker.terminate();
+            resolve();
+          } else {
+            reject(new Error('EXR worker failed or returned invalid data'));
+          }
+        };
+        worker.onerror = (err) => reject(err);
+        worker.postMessage({
+          url: '/assets/images/cubes_env.exr'
+        });
+      });
+    }
+
+    async function runAll() {
+      try {
+        await Promise.all([
+          testAudioWorker(),
+          testMsdfWorker(),
+          testBitmapWorker(),
+          testExrWorker()
+        ]);
+        results.allPassed = true;
+        statusEl.textContent = 'ALL 4 WORKERS PASSED SUCCESSFULLY!';
+        statusEl.style.color = 'green';
+        log('>>> ALL 4 WORKERS VERIFIED SUCCESSFULLY IN BROWSER RUNTIME <<<');
+      } catch (err) {
+        statusEl.textContent = 'FAILED: ' + err.message;
+        statusEl.style.color = 'red';
+        log('Error: ' + err.stack);
+      }
+    }
+
+    runAll();
+  </script>
+</body>
+</html>

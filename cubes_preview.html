@@ -1,0 +1,634 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Igloo Inc. — Cubes Scene (class aF) Reconstruction</title>
+  <style>
+    :root {
+      --bg: #07090e;
+      --panel-bg: rgba(14, 18, 28, 0.88);
+      --border: rgba(255, 255, 255, 0.12);
+      --accent: #83a1c5;
+      --cyan: #5ef3d2;
+      --font-mono: "IBM Plex Mono", Menlo, Consolas, Monaco, monospace;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      user-select: none;
+    }
+
+    body {
+      background: var(--bg);
+      color: #fff;
+      font-family: var(--font-mono);
+      overflow: hidden;
+      width: 100vw;
+      height: 100vh;
+    }
+
+    #webgl-canvas {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      z-index: 1;
+    }
+
+    /* Simulation Debug Overlay */
+    #sim-canvas {
+      position: absolute;
+      bottom: 24px;
+      right: 24px;
+      width: 140px;
+      height: 140px;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background: #000;
+      z-index: 20;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.5);
+    }
+
+    .sim-label {
+      position: absolute;
+      bottom: 170px;
+      right: 24px;
+      font-size: 10px;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      color: var(--accent);
+      z-index: 20;
+    }
+
+    /* HUD UI */
+    .hud {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      pointer-events: none;
+      z-index: 10;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      padding: 30px;
+    }
+
+    header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      pointer-events: auto;
+    }
+
+    .title-block h1 {
+      font-size: 14px;
+      font-weight: 500;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: #fff;
+    }
+
+    .title-block p {
+      font-size: 11px;
+      color: #8a96aa;
+      margin-top: 4px;
+    }
+
+    .controls-nav {
+      display: flex;
+      gap: 12px;
+    }
+
+    .btn {
+      background: var(--panel-bg);
+      border: 1px solid var(--border);
+      color: #fff;
+      font-family: var(--font-mono);
+      font-size: 11px;
+      padding: 8px 14px;
+      border-radius: 4px;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      pointer-events: auto;
+    }
+
+    .btn:hover, .btn.active {
+      border-color: var(--cyan);
+      color: var(--cyan);
+      box-shadow: 0 0 12px rgba(94, 243, 210, 0.25);
+    }
+
+    /* Live Cube Card */
+    .cube-info-card {
+      background: var(--panel-bg);
+      border: 1px solid var(--border);
+      backdrop-filter: blur(12px);
+      padding: 20px;
+      border-radius: 8px;
+      width: 340px;
+      pointer-events: auto;
+    }
+
+    .meta-tag {
+      font-size: 10px;
+      color: var(--cyan);
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      margin-bottom: 6px;
+    }
+
+    .cube-name {
+      font-size: 16px;
+      font-weight: 600;
+      margin-bottom: 12px;
+    }
+
+    .readout-row {
+      display: flex;
+      justify-content: space-between;
+      font-size: 11px;
+      color: #8a96aa;
+      padding: 4px 0;
+      border-bottom: 1px solid rgba(255,255,255,0.05);
+    }
+
+    .readout-val {
+      color: #fff;
+      font-weight: 500;
+    }
+
+    .readout-val.temp {
+      color: var(--cyan);
+    }
+
+    .hint-text {
+      font-size: 10px;
+      color: #637085;
+      margin-top: 12px;
+      line-height: 1.4;
+    }
+  </style>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js"></script>
+</head>
+<body>
+  <canvas id="webgl-canvas"></canvas>
+  <canvas id="sim-canvas" width="128" height="128"></canvas>
+  <div class="sim-label">Fluid Splat Buffer (512x512 RT)</div>
+
+  <div class="hud">
+    <header>
+      <div class="title-block">
+        <h1>IGLOO INC. — CUBES SCENE (class aF)</h1>
+        <p>Photorealistic Transmissive Ice with Interactive Fluid Simulation Overlay</p>
+      </div>
+
+      <div class="controls-nav">
+        <button class="btn active" id="btn-cube0" onclick="switchCube(0)">01: PUDGY PENGUINS</button>
+        <button class="btn" id="btn-cube1" onclick="switchCube(1)">02: OVERPASS</button>
+      </div>
+    </header>
+
+    <div class="cube-info-card">
+      <div class="meta-tag" id="card-tag">PORTFOLIO_CO_01</div>
+      <div class="cube-name" id="card-name">Pudgy Penguins</div>
+      <div class="readout-row">
+        <span>Geometry Object</span>
+        <span class="readout-val" id="val-obj">cube3.drc / pudgy.drc</span>
+      </div>
+      <div class="readout-row">
+        <span>Inception Date</span>
+        <span class="readout-val" id="val-date">01/02/2020</span>
+      </div>
+      <div class="readout-row">
+        <span>Realtime Temp</span>
+        <span class="readout-val temp" id="val-temp">+0.42°C / 32.76°F</span>
+      </div>
+      <div class="readout-row">
+        <span>Refraction Samples</span>
+        <span class="readout-val">3x Multi-Sampled + Bicubic</span>
+      </div>
+      <div class="readout-row">
+        <span>Fluid Interaction</span>
+        <span class="readout-val" id="val-fluid">0.00 Splat Velocity</span>
+      </div>
+      <div class="hint-text">
+        Drag or move your mouse over the ice cube to wipe / melt frost and trigger the real-time wave advection simulation.
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // Configuration from Be.cubes
+    const CUBES_DATA = [
+      {
+        title: "PORTFOLIO_CO_01 Pudgy Penguins",
+        name: "Pudgy Penguins",
+        tag: "PORTFOLIO_CO_01",
+        hash: "pudgy-penguins",
+        date: "01/02/2020",
+        temp: 0.0,
+        obj: "cube3",
+        innerobject: "pudgy",
+        objScale: 1.1,
+        color: "#e0e8ef",
+        scrollPosition: -5.75,
+        centeredProgress: 0.3333
+      },
+      {
+        title: "PORTFOLIO_CO_02 Overpass",
+        name: "Overpass",
+        tag: "PORTFOLIO_CO_02",
+        hash: "overpass",
+        date: "06/01/2023",
+        temp: -3.0,
+        obj: "cube1",
+        innerobject: "overpass_logo",
+        objScale: 1.2,
+        color: "#e0e8ef",
+        scrollPosition: -11.5,
+        centeredProgress: 0.6667
+      }
+    ];
+
+    let currentCubeIndex = 0;
+    const canvas = document.getElementById('webgl-canvas');
+    const simCanvas = document.getElementById('sim-canvas');
+    const simCtx = simCanvas.getContext('2d');
+
+    const renderer = new THREE.WebGLRenderer({
+      canvas,
+      antialias: true,
+      alpha: true,
+      powerPreference: "high-performance"
+    });
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+
+    const scene = new THREE.Scene();
+    const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 100);
+    camera.position.set(0, 0, 5);
+
+    // Dynamic camera parameters
+    const cameraZoom = { value: 0 };
+    let scrollProgress = 0.3333;
+
+    // Lighting setup matching aF scene
+    const ambLight = new THREE.AmbientLight(0xdde5ed, 1.2);
+    scene.add(ambLight);
+
+    const dirLight = new THREE.DirectionalLight(0xffffff, 2.5);
+    dirLight.position.set(4, 8, 5);
+    scene.add(dirLight);
+
+    const blueLight = new THREE.DirectionalLight(0x70a5ff, 1.8);
+    blueLight.position.set(-4, -4, -3);
+    scene.add(blueLight);
+
+    // -------------------------------------------------------------
+    // Fluid Simulation Ping-Pong System (jL & JL)
+    // -------------------------------------------------------------
+    const simSize = 512;
+    const simRT1 = new THREE.WebGLRenderTarget(simSize, simSize, {
+      type: THREE.HalfFloatType,
+      depthBuffer: false,
+      generateMipmaps: false
+    });
+    const simRT2 = simRT1.clone();
+    let currentRT = simRT1;
+    let previousRT = simRT2;
+
+    const simCamera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
+    const simScene = new THREE.Scene();
+
+    const simMaterial = new THREE.ShaderMaterial({
+      uniforms: {
+        tBuffer: { value: null },
+        uSplatCoords: { value: new THREE.Vector2(0.5, 0.5) },
+        uSplatPrevCoords: { value: new THREE.Vector2(0.5, 0.5) },
+        uSplatRadius: { value: 0.0 }
+      },
+      vertexShader: `
+        varying vec2 vUv;
+        void main() {
+          vUv = uv;
+          gl_Position = vec4(position, 1.0);
+        }
+      `,
+      fragmentShader: `
+        varying vec2 vUv;
+        uniform sampler2D tBuffer;
+        uniform vec2 uSplatCoords;
+        uniform vec2 uSplatPrevCoords;
+        uniform float uSplatRadius;
+
+        float line(vec2 uv, vec2 point1, vec2 point2) {
+          vec2 pa = uv - point1, ba = point2 - point1;
+          float h = clamp(dot(pa, ba) / max(dot(ba, ba), 1e-5), 0.0, 1.0);
+          return length(pa - ba * h);
+        }
+
+        void main() {
+          vec2 uv = vUv;
+          float invRes = 1.0 / 512.0;
+
+          // 4-neighbor max propagation
+          float l = texture2D(tBuffer, uv - vec2(invRes, 0.0)).r;
+          float r = texture2D(tBuffer, uv + vec2(invRes, 0.0)).r;
+          float t = texture2D(tBuffer, uv + vec2(0.0, invRes)).r;
+          float b = texture2D(tBuffer, uv - vec2(0.0, invRes)).r;
+          float nextVal = max(max(max(l, r), t), b);
+
+          // Mouse splat
+          float radius = 0.06 * smoothstep(0.05, 1.0, uSplatRadius);
+          float dist = line(vUv, uSplatPrevCoords, uSplatCoords);
+          float splat = pow(clamp(1.0 - dist / radius, 0.0, 1.0), 3.0);
+          nextVal += splat;
+
+          // Damping
+          nextVal *= 0.985;
+          nextVal = min(nextVal, 1.0);
+
+          float rim = nextVal - texture2D(tBuffer, uv).r;
+          gl_FragColor = vec4(nextVal, rim, 0.0, 1.0);
+        }
+      `,
+      depthTest: false
+    });
+
+    const simQuad = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), simMaterial);
+    simScene.add(simQuad);
+
+    // -------------------------------------------------------------
+    // Cube 3D Hierarchy (Outer Ice + Inner Object + Smoke Mist)
+    // -------------------------------------------------------------
+    const cubeGroup = new THREE.Group();
+    scene.add(cubeGroup);
+
+    // Outer Ice Cube
+    const cubeGeo = new THREE.BoxGeometry(2, 2, 2);
+    // Add uv1 for mouse frost sampling
+    cubeGeo.setAttribute('uv1', cubeGeo.attributes.uv.clone());
+
+    const cubeMat = new THREE.MeshPhysicalMaterial({
+      color: new THREE.Color("#e0e8ef"),
+      roughness: 0.65,
+      metalness: 0.05,
+      transmission: 0.92,
+      ior: 1.18,
+      thickness: 2.0,
+      reflectivity: 0.3,
+      transparent: true,
+      opacity: 0.95
+    });
+
+    // Custom shader injection for mouse frost & glowing rim
+    cubeMat.onBeforeCompile = (shader) => {
+      shader.uniforms.tMouseFrost = { value: currentRT.texture };
+      shader.uniforms.uColorFrost = { value: new THREE.Color("#83a1c5") };
+      cubeMat.userData.shader = shader;
+
+      shader.fragmentShader = shader.fragmentShader.replace(
+        '#include <clipping_planes_fragment>',
+        `
+        #include <clipping_planes_fragment>
+        vec2 frostData = texture2D(tMouseFrost, vUv).rg;
+        float mousefrost = frostData.r;
+        float mousefrostrim = frostData.g;
+        `
+      );
+
+      shader.fragmentShader = shader.fragmentShader.replace(
+        '#include <roughnessmap_fragment>',
+        `
+        #include <roughnessmap_fragment>
+        roughnessFactor *= (1.0 - mousefrost * 0.85);
+        `
+      );
+
+      shader.fragmentShader = shader.fragmentShader.replace(
+        'vec3 outgoingLight = totalDiffuse + totalSpecular + totalEmissiveRadiance;',
+        `
+        totalEmissiveRadiance += mousefrostrim * uColorFrost * 3.0;
+        totalEmissiveRadiance += vec3(0.5, 0.7, 1.0) * pow(mousefrost, 2.0) * 0.6;
+        vec3 outgoingLight = totalDiffuse + totalSpecular + totalEmissiveRadiance;
+        `
+      );
+    };
+
+    const iceCubeMesh = new THREE.Mesh(cubeGeo, cubeMat);
+    cubeGroup.add(iceCubeMesh);
+
+    // Inner Embedded Core (Pudgy Penguin / Overpass Logo stand-in)
+    const innerGeo = new THREE.OctahedronGeometry(0.7, 2);
+    const innerMat = new THREE.MeshStandardMaterial({
+      color: 0x223344,
+      emissive: 0x112233,
+      roughness: 0.2,
+      metalness: 0.8
+    });
+    const innerMesh = new THREE.Mesh(innerGeo, innerMat);
+    cubeGroup.add(innerMesh);
+
+    // Cold Smoke Plane
+    const smokeGeo = new THREE.PlaneGeometry(3, 4);
+    const smokeMat = new THREE.MeshBasicMaterial({
+      color: 0x8899aa,
+      transparent: true,
+      opacity: 0.25,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false
+    });
+    const smokeMesh = new THREE.Mesh(smokeGeo, smokeMat);
+    smokeMesh.position.y = -0.35;
+    cubeGroup.add(smokeMesh);
+
+    // -------------------------------------------------------------
+    // Floating Background Shapes (rF Reconstruction)
+    // -------------------------------------------------------------
+    const bgShapesGroup = new THREE.Group();
+    scene.add(bgShapesGroup);
+
+    const shapeGeos = [
+      new THREE.TorusGeometry(0.5, 0.15, 16, 32),
+      new THREE.CylinderGeometry(0.3, 0.3, 0.8, 16),
+      new THREE.SphereGeometry(0.4, 16, 16)
+    ];
+
+    const shapeMat = new THREE.MeshBasicMaterial({
+      color: 0xffffff,
+      transparent: true,
+      opacity: 0.35,
+      blending: THREE.AdditiveBlending,
+      wireframe: true
+    });
+
+    const backgroundShapes = [];
+    for (let i = 0; i < 24; i++) {
+      const geo = shapeGeos[i % shapeGeos.length];
+      const m = new THREE.Mesh(geo, shapeMat);
+      m.position.set(
+        (Math.random() - 0.5) * 12,
+        (Math.random() - 0.5) * 10,
+        -4 + (Math.random() - 0.5) * 3
+      );
+      m.rotation.set(Math.random() * Math.PI, Math.random() * Math.PI, 0);
+      m.userData = {
+        speed: 0.2 + Math.random() * 0.4,
+        rotSpeed: (Math.random() - 0.5) * 0.8
+      };
+      bgShapesGroup.add(m);
+      backgroundShapes.push(m);
+    }
+
+    // -------------------------------------------------------------
+    // Interaction Raycasting & Pointer Movement
+    // -------------------------------------------------------------
+    const raycaster = new THREE.Raycaster();
+    const mouse = new THREE.Vector2(-999, -999);
+    const splatPos = new THREE.Vector2(0.5, 0.5);
+    const splatPrev = new THREE.Vector2(0.5, 0.5);
+    let splatVelocity = 0.0;
+    let splatTargetVelocity = 0.0;
+
+    window.addEventListener('pointermove', (e) => {
+      mouse.x = (e.clientX / window.innerWidth) * 2 - 1;
+      mouse.y = -(e.clientY / window.innerHeight) * 2 + 1;
+
+      raycaster.setFromCamera(mouse, camera);
+      const hits = raycaster.intersectObject(iceCubeMesh);
+
+      if (hits.length > 0 && hits[0].uv) {
+        splatPrev.copy(splatPos);
+        splatPos.copy(hits[0].uv);
+        const dist = splatPos.distanceTo(splatPrev);
+        splatTargetVelocity += dist * 8.0;
+      }
+    });
+
+    window.addEventListener('resize', () => {
+      camera.aspect = window.innerWidth / window.innerHeight;
+      camera.zoom = Math.min(1.0, camera.aspect * 1.25);
+      camera.updateProjectionMatrix();
+      renderer.setSize(window.innerWidth, window.innerHeight);
+    });
+
+    // -------------------------------------------------------------
+    // Cube Switching Animation
+    // -------------------------------------------------------------
+    function switchCube(index) {
+      currentCubeIndex = index;
+      const data = CUBES_DATA[index];
+
+      document.getElementById('btn-cube0').classList.toggle('active', index === 0);
+      document.getElementById('btn-cube1').classList.toggle('active', index === 1);
+
+      document.getElementById('card-tag').textContent = data.tag;
+      document.getElementById('card-name').textContent = data.name;
+      document.getElementById('val-obj').textContent = `${data.obj}.drc / ${data.innerobject}.drc`;
+      document.getElementById('val-date').textContent = data.date;
+
+      gsap.to(cameraZoom, {
+        value: -1.5,
+        duration: 0.4,
+        yoyo: true,
+        repeat: 1,
+        ease: "power2.inOut"
+      });
+
+      gsap.to(innerMesh.scale, {
+        x: data.objScale,
+        y: data.objScale,
+        z: data.objScale,
+        duration: 0.6,
+        ease: "back.out(1.7)"
+      });
+
+      if (index === 0) {
+        innerMat.color.set(0x3a7bd5);
+        innerMat.emissive.set(0x00d2ff);
+      } else {
+        innerMat.color.set(0xf39c12);
+        innerMat.emissive.set(0xd35400);
+      }
+    }
+    switchCube(0);
+
+    // -------------------------------------------------------------
+    // Main Render Loop
+    // -------------------------------------------------------------
+    let clock = new THREE.Clock();
+
+    function animate() {
+      requestAnimationFrame(animate);
+      const time = clock.getElapsedTime();
+
+      // Fluid Simulation Step (Ping-Pong)
+      splatTargetVelocity *= 0.88;
+      splatVelocity = THREE.MathUtils.lerp(splatVelocity, splatTargetVelocity, 0.15);
+
+      simMaterial.uniforms.tBuffer.value = previousRT.texture;
+      simMaterial.uniforms.uSplatCoords.value.copy(splatPos);
+      simMaterial.uniforms.uSplatPrevCoords.value.copy(splatPrev);
+      simMaterial.uniforms.uSplatRadius.value = splatVelocity;
+
+      renderer.setRenderTarget(currentRT);
+      renderer.render(simScene, simCamera);
+      renderer.setRenderTarget(null);
+
+      // Swap ping-pong buffers
+      const tempRT = currentRT;
+      currentRT = previousRT;
+      previousRT = tempRT;
+
+      if (cubeMat.userData.shader) {
+        cubeMat.userData.shader.uniforms.tMouseFrost.value = currentRT.texture;
+      }
+
+      // Draw debug simulation mini canvas
+      simCtx.fillStyle = '#05070a';
+      simCtx.fillRect(0, 0, 128, 128);
+      simCtx.beginPath();
+      simCtx.arc(splatPos.x * 128, (1 - splatPos.y) * 128, 4 + splatVelocity * 16, 0, Math.PI * 2);
+      simCtx.fillStyle = '#5ef3d2';
+      simCtx.fill();
+
+      // Cube Rotation & Wobble (formula from nF.update)
+      const data = CUBES_DATA[currentCubeIndex];
+      const a = data.centeredProgress - scrollProgress;
+      const wobbleX = Math.sin(time * 0.3 + 1.23) * 0.08;
+      const wobbleY = Math.cos(time * 0.3 + 4.29) * 0.08;
+
+      cubeGroup.rotation.y = time * 0.15 + wobbleY;
+      cubeGroup.rotation.x = 0.2 + wobbleX;
+      innerMesh.rotation.y = -time * 0.3;
+      innerMesh.rotation.x = time * 0.2;
+
+      // Floating Shapes Idle Breathing (formula from rF)
+      backgroundShapes.forEach((s) => {
+        s.rotation.x += s.userData.rotSpeed * 0.02;
+        s.rotation.y += s.userData.rotSpeed * 0.015;
+        s.position.y += Math.sin(time * s.userData.speed) * 0.005;
+      });
+
+      // Update Realtime Temp HUD (formula from XL)
+      const currentTemp = data.temp + Math.sin(time * 0.05 + 1.23) * 2.0;
+      const fahr = currentTemp * 1.8 + 32.0;
+      const sign = currentTemp >= 0 ? '+' : '';
+      document.getElementById('val-temp').textContent = `${sign}${currentTemp.toFixed(2)}°C / ${fahr.toFixed(2)}°F`;
+      document.getElementById('val-fluid').textContent = `${splatVelocity.toFixed(2)} Splat Velocity`;
+
+      // Render 3D Scene
+      renderer.render(scene, camera);
+    }
+
+    animate();
+  </script>
+</body>
+</html>

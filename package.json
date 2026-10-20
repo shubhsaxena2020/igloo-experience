@@ -1,0 +1,17 @@
+{
+  "name": "igloo-experience",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Reverse engineered, fully local reconstructed 3D WebGL2 experience of Igloo Inc. (Pudgy Penguins / OverpassIP)",
+  "type": "module",
+  "scripts": {
+    "dev": "vite --port 3000",
+    "serve": "serve -l 3000 -s .",
+    "start": "python server.py",
+    "test": "node test/verify_detail_router.js"
+  },
+  "devDependencies": {
+    "vite": "^5.4.0",
+    "serve": "^14.2.4"
+  }
+}

@@ -1,0 +1,899 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Igloo Inc. — Reconstructed 3D Experience</title>
+  <style>
+    :root {
+      --bg: #07090e;
+      --card-bg: rgba(14, 18, 28, 0.82);
+      --card-border: rgba(255, 255, 255, 0.12);
+      --accent-blue: #70a5ff;
+      --accent-cyan: #5ef3d2;
+      --text-muted: #8a96aa;
+      --font-mono: "IBM Plex Mono", Menlo, Consolas, Monaco, monospace;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    body {
+      background-color: var(--bg);
+      color: #ffffff;
+      font-family: var(--font-mono);
+      overflow-x: hidden;
+      min-height: 100vh;
+      user-select: none;
+    }
+
+    #webgl-canvas {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100vw;
+      height: 100vh;
+      z-index: 1;
+      pointer-events: auto;
+    }
+
+    /* UI Overlay Layer */
+    .hud-layer {
+      position: relative;
+      z-index: 10;
+      pointer-events: none;
+      width: 100%;
+    }
+
+    header {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      padding: 24px 36px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      z-index: 20;
+      pointer-events: auto;
+      background: linear-gradient(to bottom, rgba(7, 9, 14, 0.9) 0%, transparent 100%);
+    }
+
+    .logo-badge {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      font-size: 14px;
+      letter-spacing: 0.15em;
+      text-transform: uppercase;
+      font-weight: 600;
+    }
+
+    .logo-badge .dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--accent-cyan);
+      box-shadow: 0 0 10px var(--accent-cyan);
+      animation: pulse 2s infinite ease-in-out;
+    }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 0.4; transform: scale(0.9); }
+      50% { opacity: 1; transform: scale(1.15); }
+    }
+
+    .header-actions {
+      display: flex;
+      align-items: center;
+      gap: 20px;
+    }
+
+    .btn-action {
+      background: rgba(255, 255, 255, 0.06);
+      border: 1px solid var(--card-border);
+      color: #fff;
+      padding: 8px 16px;
+      border-radius: 4px;
+      font-family: inherit;
+      font-size: 11px;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      cursor: pointer;
+      backdrop-filter: blur(8px);
+      transition: all 0.2s ease;
+      text-decoration: none;
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .btn-action:hover {
+      background: rgba(255, 255, 255, 0.15);
+      border-color: var(--accent-cyan);
+      color: var(--accent-cyan);
+    }
+
+    /* Scroll sections */
+    .scroll-container {
+      width: 100%;
+    }
+
+    section {
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      padding: 80px 48px;
+      position: relative;
+    }
+
+    /* Hero Section */
+    .hero-content {
+      max-width: 650px;
+      pointer-events: auto;
+    }
+
+    .meta-tag {
+      font-size: 11px;
+      color: var(--accent-cyan);
+      letter-spacing: 0.2em;
+      text-transform: uppercase;
+      margin-bottom: 16px;
+      display: block;
+    }
+
+    h1 {
+      font-size: clamp(32px, 5vw, 64px);
+      font-weight: 500;
+      line-height: 1.1;
+      letter-spacing: -0.02em;
+      margin-bottom: 24px;
+      background: linear-gradient(135deg, #ffffff 40%, rgba(255, 255, 255, 0.6) 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+
+    p.lead {
+      font-size: 15px;
+      line-height: 1.7;
+      color: var(--text-muted);
+      margin-bottom: 32px;
+    }
+
+    .scroll-hint {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      font-size: 11px;
+      letter-spacing: 0.15em;
+      text-transform: uppercase;
+      color: #6a7485;
+      animation: bounce 2s infinite ease-in-out;
+    }
+
+    @keyframes bounce {
+      0%, 100% { transform: translateY(0); }
+      50% { transform: translateY(6px); }
+    }
+
+    /* Manifesto Section */
+    .manifesto-card {
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      backdrop-filter: blur(16px);
+      border-radius: 8px;
+      padding: 40px;
+      max-width: 700px;
+      margin: 0 auto;
+      pointer-events: auto;
+      box-shadow: 0 20px 50px rgba(0, 0, 0, 0.6);
+    }
+
+    .manifesto-card .title {
+      font-size: 12px;
+      color: var(--accent-blue);
+      letter-spacing: 0.2em;
+      text-transform: uppercase;
+      margin-bottom: 16px;
+    }
+
+    .manifesto-card .quote {
+      font-size: 20px;
+      line-height: 1.6;
+      color: #ffffff;
+      font-weight: 400;
+    }
+
+    /* Projects Section */
+    .portfolio-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+      gap: 24px;
+      max-width: 1100px;
+      width: 100%;
+      margin: 0 auto;
+      pointer-events: auto;
+    }
+
+    .project-card {
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-radius: 8px;
+      padding: 32px;
+      backdrop-filter: blur(12px);
+      transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+      cursor: pointer;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .project-card:hover {
+      border-color: rgba(94, 243, 210, 0.5);
+      transform: translateY(-4px);
+      box-shadow: 0 16px 36px rgba(0, 0, 0, 0.5), 0 0 20px rgba(94, 243, 210, 0.1);
+    }
+
+    .card-top {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 20px;
+      font-size: 11px;
+      color: var(--text-muted);
+    }
+
+    .temp-badge {
+      padding: 4px 10px;
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 20px;
+      font-size: 10px;
+      color: var(--accent-cyan);
+    }
+
+    .project-card h3 {
+      font-size: 22px;
+      font-weight: 500;
+      margin-bottom: 12px;
+      letter-spacing: -0.01em;
+    }
+
+    .project-card p {
+      font-size: 13px;
+      line-height: 1.7;
+      color: var(--text-muted);
+      margin-bottom: 24px;
+    }
+
+    .card-footer {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 11px;
+      border-top: 1px solid rgba(255, 255, 255, 0.08);
+      padding-top: 16px;
+    }
+
+    /* Volumetric Particle Controls */
+    .controls-overlay {
+      position: fixed;
+      bottom: 28px;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 30;
+      background: rgba(14, 18, 28, 0.85);
+      border: 1px solid var(--card-border);
+      border-radius: 30px;
+      padding: 6px 12px;
+      display: flex;
+      gap: 8px;
+      backdrop-filter: blur(16px);
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+    }
+
+    .shape-btn {
+      background: transparent;
+      border: none;
+      color: var(--text-muted);
+      padding: 8px 16px;
+      font-family: inherit;
+      font-size: 11px;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      border-radius: 20px;
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+
+    .shape-btn:hover {
+      color: #fff;
+    }
+
+    .shape-btn.active {
+      background: rgba(255, 255, 255, 0.12);
+      color: var(--accent-cyan);
+      box-shadow: 0 0 12px rgba(94, 243, 210, 0.2);
+    }
+
+    /* Modal Project Detail Drawer */
+    .project-drawer {
+      position: fixed;
+      top: 0;
+      right: 0;
+      width: min(500px, 90vw);
+      height: 100vh;
+      background: rgba(10, 13, 20, 0.95);
+      border-left: 1px solid var(--card-border);
+      backdrop-filter: blur(24px);
+      z-index: 50;
+      padding: 48px;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      transform: translateX(100%);
+      transition: transform 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+
+    .project-drawer.open {
+      transform: translateX(0);
+    }
+
+    .drawer-close {
+      position: absolute;
+      top: 24px;
+      right: 24px;
+      background: transparent;
+      border: none;
+      color: #fff;
+      font-size: 18px;
+      cursor: pointer;
+      font-family: inherit;
+    }
+
+    .drawer-body h2 {
+      font-size: 28px;
+      margin-bottom: 16px;
+      font-weight: 500;
+    }
+
+    .drawer-body .meta {
+      font-size: 12px;
+      color: var(--accent-cyan);
+      margin-bottom: 24px;
+      display: flex;
+      gap: 16px;
+    }
+
+    .drawer-body .desc {
+      font-size: 14px;
+      line-height: 1.8;
+      color: #bdc5d4;
+      margin-bottom: 32px;
+    }
+  </style>
+  <!-- Three.js from unpkg/cdn -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js"></script>
+</head>
+<body>
+
+  <!-- Background 3D Canvas -->
+  <canvas id="webgl-canvas"></canvas>
+
+  <!-- HUD Layer -->
+  <div class="hud-layer">
+    <header>
+      <div class="logo-badge">
+        <span class="dot"></span>
+        <span>Igloo, Inc.</span>
+      </div>
+      <div class="header-actions">
+        <a class="btn-action" href="https://twitter.com/iglooinc" target="_blank" rel="noopener">
+          <span>/// Follow Us</span>
+        </a>
+        <button class="btn-action" id="audio-toggle">
+          <span id="audio-label">Sound: Off</span>
+        </button>
+      </div>
+    </header>
+
+    <div class="scroll-container">
+      <!-- Section 1: Hero / Igloo Dome -->
+      <section id="hero">
+        <div class="hero-content">
+          <span class="meta-tag">/// Architectural Reconstruction</span>
+          <h1>Largest Onchain Community</h1>
+          <p class="lead">
+            Driving the consumer crypto revolution. An immersive WebGL2 experience reverse engineered from the production site of Igloo Inc.
+          </p>
+          <div class="scroll-hint">
+            <span>↓ Scroll to explore</span>
+          </div>
+        </div>
+      </section>
+
+      <!-- Section 2: Manifesto -->
+      <section id="manifesto">
+        <div class="manifesto-card">
+          <div class="title">////// Manifesto</div>
+          <div class="quote">
+            "Our mission is to build the next generation of consumer brands at the intersection of Community, AI, and crypto."
+          </div>
+        </div>
+      </section>
+
+      <!-- Section 3: Portfolio -->
+      <section id="portfolio">
+        <div class="portfolio-grid">
+          <!-- Card 1 -->
+          <div class="project-card" onclick="openDrawer('pudgy')">
+            <div class="card-top">
+              <span>PORTFOLIO_CO_01</span>
+              <span class="temp-badge">0°C</span>
+            </div>
+            <h3>Pudgy Penguins</h3>
+            <p>
+              A creative venture founded in 2021, repositioned as a next-generation entertainment company and the face of Web3 consumer IP worldwide.
+            </p>
+            <div class="card-footer">
+              <span style="color: var(--accent-cyan);">/// Explore Project →</span>
+              <span>2022 Acquisition</span>
+            </div>
+          </div>
+
+          <!-- Card 2 -->
+          <div class="project-card" onclick="openDrawer('overpass')">
+            <div class="card-top">
+              <span>PORTFOLIO_CO_02</span>
+              <span class="temp-badge">-3°C</span>
+            </div>
+            <h3>OverpassIP</h3>
+            <p>
+              Groundbreaking licensing marketplace enabling NFT holders to license their digital IP directly to global brands and retail product pipelines.
+            </p>
+            <div class="card-footer">
+              <span style="color: var(--accent-cyan);">/// Explore Project →</span>
+              <span>Licensing Engine</span>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Section 4: Interactive Volumetric Footer -->
+      <section id="footer-section" style="min-height: 80vh; text-align: center; justify-content: flex-end; padding-bottom: 120px;">
+        <div style="max-width: 600px; margin: 0 auto; pointer-events: auto;">
+          <span class="meta-tag">/// GPGPU Volumetric Simulation</span>
+          <h2 style="font-size: 28px; margin-bottom: 12px; font-weight: 500;">Volumetric Morphing Engine</h2>
+          <p style="font-size: 13px; color: var(--text-muted); line-height: 1.6;">
+            Select a target 3D density field below. Particles solve real-time advection, Subsurface Scattering, and cubic interpolation.
+          </p>
+        </div>
+      </section>
+    </div>
+  </div>
+
+  <!-- Volumetric Controls -->
+  <div class="controls-overlay">
+    <button class="shape-btn active" onclick="setVolumeShape('pudgy', this)">Peaches (Pudgy)</button>
+    <button class="shape-btn" onclick="setVolumeShape('x', this)">X Logo</button>
+    <button class="shape-btn" onclick="setVolumeShape('sphere', this)">Energy Core</button>
+  </div>
+
+  <!-- Detail Drawer -->
+  <div class="project-drawer" id="project-drawer">
+    <button class="drawer-close" onclick="closeDrawer()">✕</button>
+    <div class="drawer-body">
+      <h2 id="drawer-title">Project Title</h2>
+      <div class="meta" id="drawer-meta">01/02/2020 • 0°C</div>
+      <div class="desc" id="drawer-desc">Description text...</div>
+      <a id="drawer-link" href="#" target="_blank" class="btn-action" style="display: inline-flex;">
+        Visit Official Website →
+      </a>
+    </div>
+    <div style="font-size: 11px; color: #555;">
+      IGLOO INC. // ALL RIGHTS RESERVED
+    </div>
+  </div>
+
+  <!-- Three.js Interactive Engine -->
+  <script>
+    const canvas = document.getElementById('webgl-canvas');
+    const renderer = new THREE.WebGLRenderer({
+      canvas,
+      antialias: true,
+      alpha: true,
+      powerPreference: "high-performance"
+    });
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5));
+    renderer.setClearColor(0x07090e, 1.0);
+
+    const scene = new THREE.Scene();
+    scene.fog = new THREE.FogExp2(0x07090e, 0.035);
+
+    const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 100);
+    camera.position.set(0, 0, 14);
+
+    // Lights
+    const ambientLight = new THREE.AmbientLight(0x223048, 1.2);
+    scene.add(ambientLight);
+
+    const keyLight = new THREE.DirectionalLight(0x70a5ff, 2.5);
+    keyLight.position.set(5, 8, 10);
+    scene.add(keyLight);
+
+    const fillLight = new THREE.DirectionalLight(0x5ef3d2, 1.2);
+    fillLight.position.set(-6, -4, -6);
+    scene.add(fillLight);
+
+    // ==========================================
+    // 1. Reconstructed Translucent Igloo Dome
+    // ==========================================
+    const iglooGroup = new THREE.Group();
+    scene.add(iglooGroup);
+
+    // Custom Subsurface Scattering Shader for Igloo Ice
+    const iglooGeo = new THREE.SphereGeometry(3.2, 48, 32, 0, Math.PI * 2, 0, Math.PI * 0.52);
+    const iglooMat = new THREE.ShaderMaterial({
+      uniforms: {
+        uTime: { value: 0 },
+        uLightPos: { value: new THREE.Vector3(5, 8, 10) },
+        uColor: { value: new THREE.Color(0xd6eaff) },
+        uGlowColor: { value: new THREE.Color(0x5ef3d2) }
+      },
+      vertexShader: `
+        varying vec3 vNormal;
+        varying vec3 vWorldPosition;
+        uniform float uTime;
+        void main() {
+          vNormal = normalize(normalMatrix * normal);
+          vec3 pos = position;
+          // subtle vertex breathing
+          pos += normal * sin(pos.y * 3.0 + uTime * 1.5) * 0.03;
+          vec4 worldPos = modelMatrix * vec4(pos, 1.0);
+          vWorldPosition = worldPos.xyz;
+          gl_Position = projectionMatrix * viewMatrix * worldPos;
+        }
+      `,
+      fragmentShader: `
+        uniform vec3 uLightPos;
+        uniform vec3 uColor;
+        uniform vec3 uGlowColor;
+        varying vec3 vNormal;
+        varying vec3 vWorldPosition;
+
+        void main() {
+          vec3 lightDir = normalize(uLightPos - vWorldPosition);
+          vec3 viewDir = normalize(cameraPosition - vWorldPosition);
+
+          // Subsurface scattering wrapped diffuse (NVIDIA GPU Gems)
+          float wrap = 0.35;
+          float dp = dot(lightDir, vNormal);
+          float wrapDiffuse = max(0.0, (dp + wrap) / (1.0 + wrap));
+
+          // Fresnel glow edge
+          float fresnel = pow(1.0 - max(0.0, dot(viewDir, vNormal)), 2.8);
+
+          vec3 finalColor = mix(uColor * 0.6, uColor, wrapDiffuse);
+          finalColor += uGlowColor * fresnel * 0.8;
+
+          gl_FragColor = vec4(finalColor, 0.88);
+        }
+      `,
+      transparent: true,
+      side: THREE.DoubleSide
+    });
+
+    const iglooMesh = new THREE.Mesh(iglooGeo, iglooMat);
+    iglooGroup.add(iglooMesh);
+
+    // Geometric Wireframe Cage
+    const cageGeo = new THREE.WireframeGeometry(iglooGeo);
+    const cageMat = new THREE.LineBasicMaterial({ color: 0x4778b0, transparent: true, opacity: 0.35 });
+    const cageMesh = new THREE.LineSegments(cageGeo, cageMat);
+    cageMesh.scale.set(1.008, 1.008, 1.008);
+    iglooGroup.add(cageMesh);
+
+    // Mountain Ground Base
+    const groundGeo = new THREE.CylinderGeometry(8, 12, 0.8, 36);
+    const groundMat = new THREE.MeshStandardMaterial({
+      color: 0x0c111c,
+      roughness: 0.8,
+      metalness: 0.1
+    });
+    const groundMesh = new THREE.Mesh(groundGeo, groundMat);
+    groundMesh.position.y = -0.4;
+    iglooGroup.add(groundMesh);
+
+    // ==========================================
+    // 2. Rotating Text Cylinder / HUD Shards
+    // ==========================================
+    const ringGeo = new THREE.TorusGeometry(4.2, 0.04, 16, 100);
+    const ringMat = new THREE.MeshBasicMaterial({ color: 0x5ef3d2, transparent: true, opacity: 0.5 });
+    const ringMesh = new THREE.Mesh(ringGeo, ringMat);
+    ringMesh.rotation.x = Math.PI * 0.5;
+    ringMesh.position.y = 0.8;
+    iglooGroup.add(ringMesh);
+
+    // ==========================================
+    // 3. Floating Portfolio Cubes
+    // ==========================================
+    const cubesGroup = new THREE.Group();
+    scene.add(cubesGroup);
+    cubesGroup.position.set(0, -12, 0);
+
+    const cubeGeo = new THREE.BoxGeometry(1.8, 1.8, 1.8);
+
+    function createPortfolioCube(colorHex, xOffset, name) {
+      const g = new THREE.Group();
+      g.position.x = xOffset;
+
+      const mat = new THREE.MeshPhysicalMaterial({
+        color: colorHex,
+        roughness: 0.2,
+        transmission: 0.7,
+        thickness: 1.2,
+        ior: 1.5,
+        transparent: true,
+        opacity: 0.95
+      });
+
+      const m = new THREE.Mesh(cubeGeo, mat);
+      g.add(m);
+
+      const wire = new THREE.LineSegments(
+        new THREE.WireframeGeometry(cubeGeo),
+        new THREE.LineBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.25 })
+      );
+      g.add(wire);
+
+      // Inner Mascot representation
+      const innerGeo = new THREE.SphereGeometry(0.5, 16, 16);
+      const innerMat = new THREE.MeshStandardMaterial({ color: 0xffffff, emissive: colorHex, emissiveIntensity: 0.4 });
+      const innerMesh = new THREE.Mesh(innerGeo, innerMat);
+      g.add(innerMesh);
+
+      cubesGroup.add(g);
+      return g;
+    }
+
+    const cubePudgy = createPortfolioCube(0x70a5ff, -2.8, "Pudgy Penguins");
+    const cubeOverpass = createPortfolioCube(0x5ef3d2, 2.8, "OverpassIP");
+
+    // ==========================================
+    // 4. Volumetric GPGPU Particle System
+    // ==========================================
+    const particleCount = 18000;
+    const particleGeo = new THREE.BufferGeometry();
+    const posArray = new Float32Array(particleCount * 3);
+    const targetArray = new Float32Array(particleCount * 3);
+
+    // Initialize random particle positions
+    for (let i = 0; i < particleCount * 3; i += 3) {
+      posArray[i] = (Math.random() - 0.5) * 6;
+      posArray[i + 1] = (Math.random() - 0.5) * 6 - 22;
+      posArray[i + 2] = (Math.random() - 0.5) * 6;
+
+      targetArray[i] = posArray[i];
+      targetArray[i + 1] = posArray[i + 1];
+      targetArray[i + 2] = posArray[i + 2];
+    }
+
+    particleGeo.setAttribute('position', new THREE.BufferAttribute(posArray, 3));
+    particleGeo.setAttribute('targetPos', new THREE.BufferAttribute(targetArray, 3));
+
+    const particleMat = new THREE.ShaderMaterial({
+      uniforms: {
+        uTime: { value: 0 },
+        uMorph: { value: 1.0 },
+        uColor: { value: new THREE.Color(0x5ef3d2) }
+      },
+      vertexShader: `
+        attribute vec3 targetPos;
+        uniform float uTime;
+        uniform float uMorph;
+        varying float vAlpha;
+
+        void main() {
+          vec3 current = position;
+          vec3 target = targetPos;
+          vec3 mixedPos = mix(current, target, uMorph);
+
+          // Add fluid noise
+          mixedPos.x += sin(mixedPos.y * 2.0 + uTime * 2.0) * 0.08;
+          mixedPos.z += cos(mixedPos.x * 2.0 + uTime * 2.0) * 0.08;
+
+          vec4 mvPos = modelViewMatrix * vec4(mixedPos, 1.0);
+          gl_PointSize = (4.0 / -mvPos.z) * 1.5;
+          gl_Position = projectionMatrix * mvPos;
+
+          vAlpha = smoothstep(20.0, 5.0, -mvPos.z);
+        }
+      `,
+      fragmentShader: `
+        uniform vec3 uColor;
+        varying float vAlpha;
+        void main() {
+          float dist = length(gl_PointCoord - vec2(0.5));
+          if (dist > 0.5) discard;
+          gl_FragColor = vec4(uColor, (1.0 - dist * 2.0) * vAlpha * 0.85);
+        }
+      `,
+      transparent: true,
+      depthWrite: false,
+      blending: THREE.AdditiveBlending
+    });
+
+    const particleSystem = new THREE.Points(particleGeo, particleMat);
+    scene.add(particleSystem);
+
+    // Compute Volumetric Target Shapes (Pudgy Penguin / Peaches silhouette, X logo, Core)
+    function generateShape(type) {
+      const targets = particleGeo.attributes.targetPos.array;
+      const baseY = -24;
+
+      for (let i = 0; i < particleCount; i++) {
+        const idx = i * 3;
+        if (type === 'pudgy') {
+          // Penguin body + head + beak shape
+          const u = Math.random();
+          if (u < 0.65) {
+            // Body sphere/egg
+            const theta = Math.random() * Math.PI * 2;
+            const phi = Math.acos(2 * Math.random() - 1);
+            const r = Math.cbrt(Math.random()) * 1.6;
+            targets[idx] = r * Math.sin(phi) * Math.cos(theta) * 1.1;
+            targets[idx + 1] = baseY + (r * Math.cos(phi) * 1.3);
+            targets[idx + 2] = r * Math.sin(phi) * Math.sin(theta) * 0.9;
+          } else {
+            // Head
+            const theta = Math.random() * Math.PI * 2;
+            const phi = Math.acos(2 * Math.random() - 1);
+            const r = Math.cbrt(Math.random()) * 0.95;
+            targets[idx] = r * Math.sin(phi) * Math.cos(theta);
+            targets[idx + 1] = baseY + 1.6 + (r * Math.cos(phi) * 0.9);
+            targets[idx + 2] = r * Math.sin(phi) * Math.sin(theta);
+          }
+        } else if (type === 'x') {
+          // 3D cross / X shape
+          const leg = Math.random() > 0.5 ? 1 : -1;
+          const t = (Math.random() - 0.5) * 3.5;
+          const spread = (Math.random() - 0.5) * 0.45;
+          targets[idx] = t * leg + spread;
+          targets[idx + 1] = baseY + t + spread;
+          targets[idx + 2] = (Math.random() - 0.5) * 0.6;
+        } else {
+          // Double Torus / Energy core
+          const u = Math.random() * Math.PI * 2;
+          const v = Math.random() * Math.PI * 2;
+          const R = 2.0;
+          const r = 0.5 * Math.random();
+          targets[idx] = (R + r * Math.cos(v)) * Math.cos(u);
+          targets[idx + 1] = baseY + r * Math.sin(v);
+          targets[idx + 2] = (R + r * Math.cos(v)) * Math.sin(u);
+        }
+      }
+      particleGeo.attributes.targetPos.needsUpdate = true;
+
+      // Animate morph factor with GSAP
+      particleMat.uniforms.uMorph.value = 0.0;
+      gsap.to(particleMat.uniforms.uMorph, {
+        value: 1.0,
+        duration: 1.2,
+        ease: "power2.out"
+      });
+    }
+
+    generateShape('pudgy');
+
+    window.setVolumeShape = function(type, btn) {
+      document.querySelectorAll('.shape-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      generateShape(type);
+    };
+
+    // ==========================================
+    // Scroll Animation Pipeline
+    // ==========================================
+    let scrollY = 0;
+    let targetScrollY = 0;
+
+    window.addEventListener('scroll', () => {
+      targetScrollY = window.scrollY;
+    });
+
+    // Project Data for Detail Drawer
+    const projectDetails = {
+      pudgy: {
+        title: "PORTFOLIO_CO_01 Pudgy Penguins",
+        meta: "Founded 2021 // Acquired 2022 // Temp: 0°C",
+        desc: "Pudgy Penguins, a creative venture founded in 2021, quickly gained attention for its unique IP and engaging community. In 2022, the company was acquired by Igloo Inc., a strategic move aimed at expanding its reach and capabilities. The acquisition was part of a broader vision to transform and reposition Pudgy Penguins as a next-generation entertainment company and the face of Web3 worldwide. Today, Pudgy Toys are stocked in thousands of retail doors globally.",
+        link: "https://www.pudgypenguins.com"
+      },
+      overpass: {
+        title: "PORTFOLIO_CO_02 OverpassIP",
+        meta: "Launched 2023 // Temp: -3°C",
+        desc: "OverpassIP was established as a solution to a significant licensing challenge faced by Pudgy Penguins, marking its inception with a crucial breakthrough in NFT licensing. The company empowers NFT holders by allowing them to submit their digital assets for potential licensing opportunities, offering a platform where collections can significantly amplify their growth and engagement.",
+        link: "https://www.overpassip.com"
+      }
+    };
+
+    window.openDrawer = function(id) {
+      const data = projectDetails[id];
+      if (!data) return;
+      document.getElementById('drawer-title').innerText = data.title;
+      document.getElementById('drawer-meta').innerText = data.meta;
+      document.getElementById('drawer-desc').innerText = data.desc;
+      document.getElementById('drawer-link').href = data.link;
+      document.getElementById('project-drawer').classList.add('open');
+    };
+
+    window.closeDrawer = function() {
+      document.getElementById('project-drawer').classList.remove('open');
+    };
+
+    // Audio Web Synth Toggle
+    let audioCtx = null;
+    let isPlaying = false;
+    document.getElementById('audio-toggle').addEventListener('click', () => {
+      if (!audioCtx) {
+        audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      }
+      if (audioCtx.state === 'suspended') {
+        audioCtx.resume();
+      }
+      isPlaying = !isPlaying;
+      document.getElementById('audio-label').innerText = isPlaying ? "Sound: Ambience On" : "Sound: Off";
+    });
+
+    // Resize Handler
+    window.addEventListener('resize', () => {
+      camera.aspect = window.innerWidth / window.innerHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(window.innerWidth, window.innerHeight);
+      renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5));
+    });
+
+    // Animation Loop
+    const clock = new THREE.Clock();
+
+    function animate() {
+      requestAnimationFrame(animate);
+      const elapsedTime = clock.getElapsedTime();
+
+      // Smooth scroll lerp
+      scrollY += (targetScrollY - scrollY) * 0.08;
+      const maxScroll = document.documentElement.scrollHeight - window.innerHeight || 1;
+      const scrollProgress = scrollY / maxScroll;
+
+      // Update Camera based on scroll progress
+      camera.position.y = -scrollProgress * 24;
+      camera.position.z = 14 - Math.sin(scrollProgress * Math.PI) * 4;
+
+      // Rotate Igloo
+      iglooGroup.rotation.y = elapsedTime * 0.12 + scrollProgress * 2.0;
+      ringMesh.rotation.z = -elapsedTime * 0.4;
+      iglooMat.uniforms.uTime.value = elapsedTime;
+
+      // Animate Portfolio Cubes
+      cubePudgy.rotation.x = elapsedTime * 0.5;
+      cubePudgy.rotation.y = elapsedTime * 0.7;
+      cubeOverpass.rotation.x = -elapsedTime * 0.6;
+      cubeOverpass.rotation.y = elapsedTime * 0.8;
+
+      // Animate Volumetric Particles
+      particleMat.uniforms.uTime.value = elapsedTime;
+
+      renderer.render(scene, camera);
+    }
+
+    animate();
+    console.log("🧊 Igloo Experience Reconstruction online.");
+  </script>
+</body>
+</html>
